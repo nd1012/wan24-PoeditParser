@@ -23,4 +23,4 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore ./src/wan24-PoeditParser.sln --ignore-failed-sources
     - name: Build lib
-      run: dotnet build ./src/wan24-PoeditParser CLI/wan24-PoeditParser CLI.csproj --no-restore
+      run: dotnet build "./src/wan24-PoeditParser CLI/wan24-PoeditParser CLI.csproj" --no-restore
