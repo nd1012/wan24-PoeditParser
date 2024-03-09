@@ -63,12 +63,16 @@ namespace wan24.PoeditParser
             {
                 if (!Merge) ParserConfig.Patterns.Clear();
                 foreach (string[] pattern in Patterns)
+                {
+                    if (pattern.Length != 2 && pattern.Length != 3)
+                        throw new InvalidDataException($"Invalid pattern definition with {pattern.Length} elements");
                     ParserConfig.Patterns.Add(new ParserPattern()
                     {
                         Pattern = pattern[0],
                         Options = JsonHelper.Decode<RegexOptions>(pattern[1]),
                         Replacement = pattern.Length > 2 ? pattern[2] : null
                     });
+                }
             }
             if (FileExtensions is not null)
             {
@@ -92,12 +96,16 @@ namespace wan24.PoeditParser
             {
                 if (!Merge) ParserConfig.Patterns.Clear();
                 foreach (string[] pattern in Patterns)
+                {
+                    if (pattern.Length != 2 && pattern.Length != 3)
+                        throw new InvalidDataException($"Invalid pattern definition with {pattern.Length} elements");
                     ParserConfig.Patterns.Add(new ParserPattern()
                     {
                         Pattern = pattern[0],
                         Options = JsonHelper.Decode<RegexOptions>(pattern[1]),
                         Replacement = pattern.Length > 2 ? pattern[2] : null
                     });
+                }
             }
             if (FileExtensions is not null)
             {

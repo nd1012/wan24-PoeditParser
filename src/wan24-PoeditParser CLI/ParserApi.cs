@@ -174,11 +174,11 @@ namespace wan24.PoeditParser
                     await writer.WriteLineAsync($"#").DynamicContext();
                     await writer.WriteLineAsync($"msgid \"\"").DynamicContext();
                     await writer.WriteLineAsync($"msgstr \"\"").DynamicContext();
-                    await writer.WriteLineAsync("MIME-Version: 1.0\n".ToLiteral()).DynamicContext();
-                    await writer.WriteLineAsync($"\"{"Content-Type: text/plain; charset=UTF-8\n".ToLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{"Content -Transfer-Encoding: 8bit\n".ToLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{$"X-Generator: wan24PoeditParser {Assembly.GetExecutingAssembly().GetCustomAttributeCached<AssemblyInformationalVersionAttribute>()?.InformationalVersion}\n".ToLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{$"X-Poedit-SourceCharset: {ParserConfig.SourceEncoding.WebName}\n".ToLiteral()}\"").DynamicContext();
+                    await writer.WriteLineAsync($"\"{"MIME-Version: 1.0\n".ToPoeditMessageLiteral()}\"").DynamicContext();
+                    await writer.WriteLineAsync($"\"{"Content-Type: text/plain; charset=UTF-8\n".ToPoeditMessageLiteral()}\"").DynamicContext();
+                    await writer.WriteLineAsync($"\"{"Content -Transfer-Encoding: 8bit\n".ToPoeditMessageLiteral()}\"").DynamicContext();
+                    await writer.WriteLineAsync($"\"{$"X-Generator: wan24PoeditParser {Assembly.GetExecutingAssembly().GetCustomAttributeCached<AssemblyInformationalVersionAttribute>()?.InformationalVersion}\n".ToPoeditMessageLiteral()}\"").DynamicContext();
+                    await writer.WriteLineAsync($"\"{$"X-Poedit-SourceCharset: {ParserConfig.SourceEncoding.WebName}\n".ToPoeditMessageLiteral()}\"").DynamicContext();
                 }
                 // Found keywords
                 foreach (ParserMatch match in keywords)
