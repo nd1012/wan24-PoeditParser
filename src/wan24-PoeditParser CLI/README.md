@@ -17,8 +17,18 @@ The Poedit parser is available as a dotnet tool and can be installed from the
 command line:
 
 ```bash
-dotnet tool install -g wan24PoeditParser
+dotnet tool install -g wan24-PoeditParser
 ```
+
+The default installation folder is 
+
+- `%USER%\.dotnet\tools` in Windows
+- `~/.dotnet/tools` in Linux (or MAC)
+
+**NOTE**: Please ensure that your global .NET tool path is in the `PATH` 
+environment variable (open a new Windows terminal after adding the path using 
+_Settings_ -> _System_ -> _Extended system settings_ -> _Extended_ -> 
+_Environment variables_).
 
 ### Default file extensions
 
@@ -42,7 +52,7 @@ must be C style escaped.
 Command to extract translations:
 
 ```bash
-dotnet tool run wan24PoeditParser (-singleThread) (--config "/path/to/wan24PoeditParserConfig.json") (--ext ".ext" ...) --output %o %C %F
+wan24PoeditParser (-singleThread) (--config "/path/to/wan24PoeditParserConfig.json") (--ext ".ext" ...) --output %o %C %F
 ```
 
 **NOTE**: The `--config` parameter is optional and used in case you want to 
@@ -50,6 +60,12 @@ define a custom configuration file. Using the optional `-singleThread` you can
 disable multithreading (it'll override the configuration). The optional 
 `--ext` parameter defines the file extensions to use when walking through a 
 folder tree and overrides the configuration.
+
+Minimal working example using all default settings:
+
+```bash
+wan24PoeditParser --output %o %C %F
+```
 
 One input file list entry:
 
@@ -106,8 +122,9 @@ During merging, lists will be combined, and single options will be overwritten.
 
 ### Parsing from the command line
 
-If you want to call the parser manually, you can display help like this:
+If you want to call the parser manually and use advanced options, you can 
+display help like this:
 
 ```bash
-dotnet tool run wan24PoeditParser help (--api API (--method METHOD)) (-details)
+wan24PoeditParser help (--api API (--method METHOD)) (-details)
 ```

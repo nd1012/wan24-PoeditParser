@@ -10,5 +10,5 @@ Settings.LogLevel = LogLevel.Trace;
 Logging.Logger = new VividConsoleLogger(LogLevel.Trace);
 #endif
 Translation.Current = Translation.Dummy;
-CliApi.CommandLine = "dotnet tool run wan24PoeditParser";
+CliApi.CommandLine = "wan24PoeditParser";
 return await CliApi.RunAsync(args, exportedApis: [typeof(CliHelpApi), typeof(ParserApi)]);
