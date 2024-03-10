@@ -22,7 +22,7 @@ namespace wan24.PoeditParser
                 },
                 new ParserPattern()
                 {
-                    Pattern= @"^.*((_|gettextn?|Translate(Plural)?)\(\s*(\"".*[^\\]\"")).*$",
+                    Pattern= @"^.*((__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*(\"".*[^\\]\"")).*$",
                     Options = RegexOptions.Compiled,
                     Replacement = "$4"
                 },

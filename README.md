@@ -43,9 +43,9 @@ folder tree.
 
 Per default keywords will be found by these regular expressions:
 
-- `^.*((Description|DisplayText)\(\s*(\"".*[^\\]\"")\s*\)).*$` (`$3`)
-- `^.*((_|gettextn?|Translate(Plural)?)\(\s*(\"".*[^\\]\"")).*$` (`$4`)
-- `^.*(CliApi[^\s]*\([^\)]*Example\s*\=\s*(\"".*[^\\]\"")).*$` (`$2`)
+- `^.*((Description|DisplayText)\(\s*(\".*[^\\]\")\s*\)).*$` (`$3`)
+- `^.*((__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*(\".*[^\\]\")).*$` (`$4`)
+- `^.*(CliApi[^\s]*\([^\)]*Example\s*\=\s*(\".*[^\\]\")).*$` (`$2`)
 
 **NOTE**: (Multiline) concatenated string value definitions (like 
 `"Part a" + "Part b"`) or interpolations can't be parsed. The matched keyword 

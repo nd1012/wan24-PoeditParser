@@ -3,6 +3,10 @@
 This is a small dotnet tool for parsing source code for gettext strings and 
 writing the result in the PO format to a file or STDOUT.
 
+**CAUTION**: It can create a PO file from the command line, but using it as 
+Poedit extractor didn't work yet (Poedit discards the custom extractor 
+configuration, which may be a bug - not sure yet).
+
 It's pre-configured for use with the 
 [`wan24-Core`](https://github.com/WAN-Solutions/wan24-Core) translation 
 helpers for C#, but it can be customized easily for any environment and any 
@@ -39,9 +43,9 @@ folder tree.
 
 Per default keywords will be found by these regular expressions:
 
-- `^.*((Description|DisplayText)\(\s*(\"".*[^\\]\"")\s*\)).*$` (`$3`)
-- `^.*((_|gettextn?|Translate(Plural)?)\(\s*(\"".*[^\\]\"")).*$` (`$4`)
-- `^.*(CliApi[^\s]*\([^\)]*Example\s*\=\s*(\"".*[^\\]\"")).*$` (`$2`)
+- `^.*((Description|DisplayText)\(\s*(\".*[^\\]\")\s*\)).*$` (`$3`)
+- `^.*((__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*(\".*[^\\]\")).*$` (`$4`)
+- `^.*(CliApi[^\s]*\([^\)]*Example\s*\=\s*(\".*[^\\]\")).*$` (`$2`)
 
 **NOTE**: (Multiline) concatenated string value definitions (like 
 `"Part a" + "Part b"`) or interpolations can't be parsed. The matched keyword 
