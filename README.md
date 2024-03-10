@@ -3,6 +3,10 @@
 This is a small dotnet tool for parsing source code for gettext strings and 
 writing the result in the PO format to a file or STDOUT.
 
+**CAUTION**: It can create a PO file from the command line, but using it as 
+Poedit extractor didn't work yet (Poedit discards the custom extractor 
+configuration, which may be a bug - not sure yet).
+
 It's pre-configured for use with the 
 [`wan24-Core`](https://github.com/WAN-Solutions/wan24-Core) translation 
 helpers for C#, but it can be customized easily for any environment and any 

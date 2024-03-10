@@ -20,7 +20,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/nd1012/wan24-PoeditParser</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>poedit</PackageTags>
+    <PackageTags>poedit;i8n</PackageTags>
     <PackAsTool>True</PackAsTool>
     <ToolCommandName>wan24PoeditParser</ToolCommandName>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
