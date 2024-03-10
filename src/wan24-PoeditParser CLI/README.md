@@ -29,8 +29,9 @@ folder tree.
 
 Per default keywords will be found by these regular expressions:
 
-- `(_|gettextn?|Description|DisplayText)\(\s*(\"[^\n]*[^\\]\")\s*\)` like 
-`_("\tText to translate")`
+- `^.*((Description|DisplayText)\(\s*(\"".*[^\\]\"")\s*\)).*$` (`$3`)
+- `^.*((_|gettextn?|Translate(Plural)?)\(\s*(\"".*[^\\]\"")).*$` (`$4`)
+- `^.*(CliApi[^\s]*\([^\)]*Example\s*\=\s*(\"".*[^\\]\"")).*$` (`$2`)
 
 **NOTE**: (Multiline) concatenated string value definitions (like 
 `"Part a" + "Part b"`) or interpolations can't be parsed. The matched keyword 
@@ -60,14 +61,6 @@ Configured source code encoding (default is UTF-8):
 
 ```bash
 --encoding %c
-```
-
-### Parsing from the command line
-
-If you want to call the parser manually, you can display help like this:
-
-```bash
-dotnet tool run wan24PoeditParser help (--api API (--method METHOD)) (-details)
 ```
 
 ### Custom parser configuration
@@ -110,3 +103,11 @@ replacement matched the search expression string, the full search match will
 be the used keyword.
 
 During merging, lists will be combined, and single options will be overwritten.
+
+### Parsing from the command line
+
+If you want to call the parser manually, you can display help like this:
+
+```bash
+dotnet tool run wan24PoeditParser help (--api API (--method METHOD)) (-details)
+```

@@ -8,6 +8,25 @@
     <Nullable>enable</Nullable>
     <AssemblyName>wan24PoeditPParser</AssemblyName>
     <Configurations>Debug;Release;Trunk</Configurations>
+    <PackageId>wan24-PoeditParser</PackageId>
+    <Title>wan24-PoeditParser</Title>
+    <Version>1.0.0</Version>
+    <Authors>nd1012</Authors>
+    <Company>Andreas Zimmermann, wan24.de</Company>
+    <Product>wan24-PoeditParser</Product>
+    <Description>Poedit source code extractor</Description>
+    <Copyright>(c)2024 Andreas Zimmermann, wan24.de</Copyright>
+    <PackageProjectUrl>https://github.com/nd1012/wan24-PoeditParser</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/nd1012/wan24-PoeditParser</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>poedit</PackageTags>
+    <PackAsTool>True</PackAsTool>
+    <ToolCommandName>wan24PoeditParser</ToolCommandName>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+    <DebugType>embedded</DebugType>
+    <EmbedAllSources>true</EmbedAllSources>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Trunk|AnyCPU'">
@@ -19,14 +38,25 @@
   </Target>
 
   <ItemGroup>
-    <PackageReference Include="wan24-CLI" Version="1.1.0" Condition="'$(Configuration)' != 'Trunk'" />
-    <PackageReference Include="wan24-Core" Version="2.10.0" Condition="'$(Configuration)' != 'Trunk'" />
+    <PackageReference Include="wan24-CLI" Version="1.2.0" Condition="'$(Configuration)' != 'Trunk'" />
+    <PackageReference Include="wan24-Core" Version="2.10.1" Condition="'$(Configuration)' != 'Trunk'" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\ObjectValidation\src\ObjectValidation\ObjectValidation.csproj" Condition="'$(Configuration)' == 'Trunk'" />
     <ProjectReference Include="..\..\..\wan24-CLI\src\wan24-CLI\wan24-CLI.csproj" Condition="'$(Configuration)' == 'Trunk'" />
     <ProjectReference Include="..\..\..\wan24-Core\src\Wan24-Core\Wan24-Core.csproj" Condition="'$(Configuration)' == 'Trunk'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
