@@ -1,9 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using System.ComponentModel;
-using System.Diagnostics.Contracts;
 using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using wan24.CLI;
 using wan24.Core;
 using static wan24.Core.Logger;
@@ -17,7 +15,7 @@ namespace wan24.PoeditParser
     [CliApi("parser", IsDefault = true)]
     [DisplayText("Poedit parser")]
     [Description("CLI API for parsing a PO file from source code")]
-    public sealed class ParserApi
+    public sealed partial class ParserApi
     {
         /// <summary>
         /// Constructor
@@ -97,17 +95,38 @@ namespace wan24.PoeditParser
             )
         {
             // Configure
-            if (config is not null) await AppConfig.LoadAsync<ParserAppConfig>(config).DynamicContext();// Load custom JSON configuration file
-            if (singleThread || verbose) ParserConfig.SingleThread = verbose || singleThread;// Override multithreading
+            if (config is not null)
+            {
+                // Load custom JSON configuration file
+                if (Trace) WriteTrace($"Loading JSON configuration from \"{config}\"");
+                await AppConfig.LoadAsync<ParserAppConfig>(config).DynamicContext();
+            }
+            if (singleThread || verbose)
+            {
+                // Override multithreading
+                if (Trace) WriteTrace($"Single threaded {verbose || singleThread}");
+                ParserConfig.SingleThread = verbose || singleThread;
+            }
             if (ext is not null && ext.Length > 0)
             {
                 // Override file extensions
+                if (Trace) WriteTrace($"Override file extensions with \"{string.Join(", ", ext)}\"");
                 ParserConfig.FileExtensions.Clear();
                 ParserConfig.FileExtensions.AddRange(ext);
             }
-            if (encoding is not null) ParserConfig.SourceEncoding = Encoding.GetEncoding(encoding);// Override source encoding
-            if (verbose) Logging.Logger ??= new VividConsoleLogger(LogLevel.Information);// Ensure having a logger for verbose output
-            if (!verbose) verbose = Logging.Logger is not null && Info;// Always be verbose if a logger was configured
+            if (encoding is not null)
+            {
+                // Override source encoding
+                if (Trace) WriteTrace($"Override source encoding with \"{encoding}\"");
+                ParserConfig.SourceEncoding = Encoding.GetEncoding(encoding);
+            }
+            if (verbose && Logging.Logger is null) Logging.Logger = new VividConsoleLogger(LogLevel.Information);// Ensure having a logger for verbose output
+            if (!verbose)
+            {
+                // Always be verbose if a logger was configured
+                if (Trace) WriteTrace($"Force verbose {Logging.Logger is not null && Info}");
+                verbose = Logging.Logger is not null && Info;
+            }
             if (verbose)
             {
                 // Output the used final settings
@@ -128,7 +147,10 @@ namespace wan24.PoeditParser
             {
                 // Use given file-/foldernames
                 if (verbose) WriteInfo("Using given file-/foldernames");
-                TranslationWorker worker = new(ParserConfig.SingleThread ? 1 : Environment.ProcessorCount << 1, keywords, verbose);
+                FileWorker worker = new(ParserConfig.SingleThread ? 1 : Environment.ProcessorCount << 1, keywords, verbose)
+                {
+                    Name = "Poedit parser parallel file worker"
+                };
                 await using (worker.DynamicContext())
                 {
                     // Start the parallel worker
@@ -155,6 +177,9 @@ namespace wan24.PoeditParser
                                 continue;
                             }
                             if (verbose) WriteInfo($"Found {files.Length} files in {fullPath}");
+                            if (Trace)
+                                foreach (string file in files)
+                                    WriteTrace($"Going to process file \"{file}\"");
                             await worker.EnqueueRangeAsync(files).DynamicContext();
                         }
                         else if (File.Exists(fullPath))
@@ -174,6 +199,7 @@ namespace wan24.PoeditParser
                         }
                     }
                     // Wait until the parallel worker did finish all jobs
+                    if (Trace) WriteTrace("Waiting for all files to finish processing");
                     await worker.WaitBoringAsync().DynamicContext();
                 }
             }
@@ -211,140 +237,6 @@ namespace wan24.PoeditParser
                 }
             }
             if (verbose) WriteInfo("Done writing the PO output");
-        }
-
-        /// <summary>
-        /// Process a source file
-        /// </summary>
-        /// <param name="stream">Stream (will be disposed!)</param>
-        /// <param name="keywords">Keywords</param>
-        /// <param name="verbose">Be verbose?</param>
-        /// <param name="fileName">Filename</param>
-        /// <returns>If any keyword was found</returns>
-        private static async Task<bool> ProcessAsync(
-            Stream stream,
-            HashSet<ParserMatch> keywords,
-            bool verbose,
-            string? fileName = null
-            )
-        {
-            if(verbose) WriteInfo($"Processing file {fileName}");
-            bool found = false;// If any Poedit message was found in the current source file
-            await using (stream.DynamicContext())
-            {
-                bool replaced;// If a replace pattern did match during the replace loop
-                string currentLine,// Current line in the source file (without the last matched patterns)
-                    keyword;// Currently matched keyword
-                int lineNumber = 0;// Current line number in the source file (starts with 1)
-                ParserMatch? match;// Existing/new Poedit parser match
-                ParserPattern? pattern;// First matching Poedit parser pattern (may be a matching pattern or a replacement)
-                Match? rxMatch = null;// Regular expression match of the first matching Poedit parser pattern
-                using StreamReader reader = new(stream, ParserConfig.SourceEncoding);// Source file reader which uses the configured source encoding
-                while (await reader.ReadLineAsync().DynamicContext() is string line)
-                {
-                    // File contents per line loop
-                    lineNumber++;
-                    currentLine = keyword = line;
-                    while (true)
-                    {
-                        // Current line parsing loop (parse until no Poedit parser pattern is matching)
-                        pattern = ParserConfig.Patterns.FirstOrDefault(p => (rxMatch = p.Expression.Matches(currentLine).FirstOrDefault()) is not null);
-                        if (pattern is null) break;
-                        // Handle the current match
-                        Contract.Assert(rxMatch is not null);
-                        found = true;
-                        replaced = true;
-                        keyword = currentLine;
-                        while (replaced)
-                        {
-                            // Poedit parser pattern look (replace until we have the final keyword)
-                            replaced = false;
-                            foreach (ParserPattern pp in ParserConfig.Patterns.Where(p => p.Replacement is not null && p.Expression.IsMatch(keyword)))
-                            {
-                                replaced = true;
-                                keyword = pp.Expression.Replace(keyword, pp.Replacement!);
-                            }
-                        }
-                        // Remove the parsed keyword from the current line and store its position
-                        currentLine = currentLine.Replace(rxMatch.Value, string.Empty);
-                        keyword = JsonHelper.Decode<string>(keyword)!;// keyword = "message"
-                        lock (keywords)
-                        {
-                            match = keywords.FirstOrDefault(m => m.Keyword == keyword);
-                            if (match is null)
-                                keywords.Add(match = new()
-                                {
-                                    Keyword = keyword,
-                                });
-                            match.Positions.Add(new()
-                            {
-                                FileName = fileName,
-                                LineNumber = lineNumber
-                            });
-                        }
-                        if (verbose) WriteInfo($"Found keyword \"{keyword}\" in file{(fileName is null ? string.Empty : $" \"{fileName}\"")} on line #{lineNumber}");
-                    }
-                }
-                return found;
-            }
-        }
-
-        /// <summary>
-        /// Write an entry
-        /// </summary>
-        /// <param name="stream">Stream</param>
-        /// <param name="match">Match</param>
-        private static async Task WriteEntryAsync(StreamWriter stream, ParserMatch match)
-        {
-            await stream.WriteLineAsync().DynamicContext();
-            // Position tags comment line
-            await stream.WriteAsync($"#:").DynamicContext();
-            foreach (ParserMatch.Position pos in match.Positions)
-                await stream.WriteAsync($" {((pos.FileName?.Contains(' ') ?? true) ? $"\u2068{pos.FileName}\u2069" : pos.FileName)}:{pos.LineNumber}").DynamicContext();
-            await stream.WriteLineAsync().DynamicContext();
-            if (match.Keyword.Contains('\n'))
-            {
-                // Multiline message
-                await stream.WriteLineAsync($"msgid \"\"");
-                foreach (string line in match.Keyword.Replace("\r", string.Empty).Split('\n'))
-                    await stream.WriteLineAsync($"\"{$"{line}\n".ToPoeditMessageLiteral()}\"");
-            }
-            else
-            {
-                // Single line message
-                await stream.WriteLineAsync($"msgid \"{match.Keyword.ToPoeditMessageLiteral()}\"");
-            }
-            await stream.WriteLineAsync($"msgstr \"\"");
-        }
-
-        /// <summary>
-        /// Translation worker
-        /// </summary>
-        /// <remarks>
-        /// Constructor
-        /// </remarks>
-        /// <param name="capacity">Capacity</param>
-        /// <param name="keywords">Keywords</param>
-        /// <param name="verbose">Be verbose?</param>
-        private sealed class TranslationWorker(in int capacity, in HashSet<ParserMatch> keywords, in bool verbose)
-            : ParallelItemQueueWorkerBase<string>(capacity, capacity)
-        {
-            /// <summary>
-            /// Keywords
-            /// </summary>
-            public HashSet<ParserMatch> Keywords { get; } = keywords;
-
-            /// <summary>
-            /// Verbose?
-            /// </summary>
-            public bool Verbose { get; } = verbose;
-
-            /// <inheritdoc/>
-            protected override async Task ProcessItem(string item, CancellationToken cancellationToken)
-            {
-                FileStream fs = FsHelper.CreateFileStream(item, FileMode.Open, FileAccess.Read, FileShare.Read);
-                await using (fs.DynamicContext()) await ProcessAsync(fs, Keywords, Verbose, item).DynamicContext();
-            }
         }
     }
 }
