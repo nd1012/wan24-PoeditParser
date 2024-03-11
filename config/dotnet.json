@@ -1,0 +1,58 @@
+{
+	"SingleThread": false,
+	"Encoding": "UTF-8",
+	"Patterns": [
+		[
+			"(Description|DisplayText)\\(\\s*\\\".*[^\\\\]\\\"\\s*\\)",
+			"None"
+		],
+		[
+			"^.*(Description|DisplayText)\\(\\s*(\\\".*[^\\\\]\\\")\\s*\\).*$",
+			"None",
+			"$2"
+		],
+		[
+			"(__?|gettextn?|Translate(Plural)?|GetTerm)\\(\\s*\\\".*[^\\\\]\\\"",
+			"None"
+		],
+		[
+			"^.*(__?|gettextn?|Translate(Plural)?|GetTerm)\\(\\s*(\\\".*[^\\\\]\\\").*$",
+			"None",
+			"$3"
+		],
+		[
+			"CliApi[^\\s]*\\([^\\)]*Example\\s*\\=\\s*\\\".*[^\\\\]\\\"",
+			"None"
+		],
+		[
+			"^.*CliApi[^\\s]*\\([^\\)]*Example\\s*\\=\\s*(\\\".*[^\\\\]\\\").*$",
+			"None",
+			"$1"
+		],
+		[
+			"[^\\@\\$]\\\".*[^\\\\]\\\".*;.*\\/\\/.*wan24PoeditParser\\:include",
+			"IgnoreCase"
+		],
+		[
+			"^.*[^\\@\\$](\\\".*[^\\\\]\\\").*;.*\\/\\/.*wan24PoeditParser\\:include.*$",
+			"IgnoreCase",
+			"$1"
+		],
+		[
+			"^\\s*(\\\".*[^\\\\]\\\").+$",
+			"None",
+			"$1"
+		]
+	],
+	"FileExtensions": [
+		".cs",
+		".razor",
+		".cshtml",
+		".aspx",
+		".cake",
+		".vb"
+	],
+	"MergeOutput": false,
+	"FailOnError": false,
+	"Merge": false
+}

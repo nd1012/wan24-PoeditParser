@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using wan24.CLI;
 using wan24.Core;
 
 namespace wan24.PoeditParser
@@ -14,6 +15,12 @@ namespace wan24.PoeditParser
         public ParserAppConfig() : base() { }
 
         /// <summary>
+        /// Constructor
+        /// </summary>
+        /// <param name="setApplied">Set as the applied configuration?</param>
+        public ParserAppConfig(in bool setApplied) : base() => SetApplied = setApplied;
+
+        /// <summary>
         /// Applied Poedit app configuration
         /// </summary>
         public static ParserAppConfig? AppliedPoeditConfig { get; private set; }
@@ -24,12 +31,17 @@ namespace wan24.PoeditParser
         public AppConfig? Core { get; set; }
 
         /// <summary>
-        /// Use only a single thread?
+        /// CLI app configuration
+        /// </summary>
+        public CliAppConfig? CLI { get; set; }
+
+        /// <summary>
+        /// <see langword="true"/> to disable multi-threading (process only one source file per time)
         /// </summary>
         public bool SingleThread { get; set; }
 
         /// <summary>
-        /// Source text encoding identifier
+        /// Text encoding of the source files (may be any encoding (web) identifier)
         /// </summary>
         public string? Encoding { get; set; }
 
@@ -39,9 +51,19 @@ namespace wan24.PoeditParser
         public string[][]? Patterns { get; set; }
 
         /// <summary>
-        /// File extensions to look for
+        /// File extensions to look for (including dot)
         /// </summary>
         public string[]? FileExtensions { get; set; }
+
+        /// <summary>
+        /// Merge the PO contents with an existing output PO file?
+        /// </summary>
+        public bool MergeOutput { get; set; }
+
+        /// <summary>
+        /// Fail the whole process on any error?
+        /// </summary>
+        public bool FailOnError { get; set; }
 
         /// <summary>
         /// Merge this configuration with the default configuration?
@@ -57,6 +79,7 @@ namespace wan24.PoeditParser
                 AppliedPoeditConfig = this;
             }
             Core?.Apply();
+            CLI?.Apply();
             ParserConfig.SingleThread = SingleThread;
             if (Encoding is not null) ParserConfig.SourceEncoding = System.Text.Encoding.GetEncoding(Encoding);
             if (Patterns is not null)
@@ -79,6 +102,8 @@ namespace wan24.PoeditParser
                 if (!Merge) ParserConfig.FileExtensions.Clear();
                 ParserConfig.FileExtensions.AddRange(FileExtensions);
             }
+            ParserConfig.MergeOutput = MergeOutput;
+            ParserConfig.FailOnError = FailOnError;
         }
 
         /// <inheritdoc/>
@@ -90,6 +115,7 @@ namespace wan24.PoeditParser
                 AppliedPoeditConfig = this;
             }
             if (Core is not null) await Core.ApplyAsync(cancellationToken).DynamicContext();
+            if (CLI is not null) await CLI.ApplyAsync(cancellationToken).DynamicContext();
             ParserConfig.SingleThread = SingleThread;
             if (Encoding is not null) ParserConfig.SourceEncoding = System.Text.Encoding.GetEncoding(Encoding);
             if (Patterns is not null)
@@ -112,6 +138,8 @@ namespace wan24.PoeditParser
                 if (!Merge) ParserConfig.FileExtensions.Clear();
                 ParserConfig.FileExtensions.AddRange(FileExtensions);
             }
+            ParserConfig.MergeOutput = MergeOutput;
+            ParserConfig.FailOnError = FailOnError;
         }
     }
 }

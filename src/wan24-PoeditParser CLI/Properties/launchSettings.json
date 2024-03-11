@@ -2,7 +2,7 @@
   "profiles": {
     "wan24-PoeditParser CLI": {
       "commandName": "Project",
-      "commandLineArgs": "--input ../../../ --output test.po"
+      "commandLineArgs": "--input \"../../../../../../wan24-Core/\" --output test.po -verbose"
     }
   }
 }

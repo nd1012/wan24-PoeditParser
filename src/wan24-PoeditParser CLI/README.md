@@ -26,8 +26,8 @@ dotnet tool install -g wan24-PoeditParser
 
 The default installation folder is 
 
-- `%USER%\.dotnet\tools` in Windows
-- `~/.dotnet/tools` in Linux (or MAC)
+- `%USER%\.dotnet\tools` for Windows
+- `~/.dotnet/tools` for Linux (or MAC)
 
 **NOTE**: Please ensure that your global .NET tool path is in the `PATH` 
 environment variable (open a new Windows terminal after adding the path using 
@@ -36,16 +36,47 @@ _Environment variables_).
 
 ### Default file extensions
 
-Per default `.cs` file extensions will be looked up when walking through a 
-folder tree.
+Per default these file extensions will be looked up when walking through a 
+folder tree:
+
+- `.cs`
+- `.razor`
+- `.cshtml`
+- `.aspx`
+- `.cake`
+- `.vb`
+
+These extensions try to match all possible .NET C#/VB source code files.
+
+In the `config` folder you'll find configurations for other languages, while 
+the `dotnet.json` contains the `wan24-PoeditParser` default configuration, 
+which you may use as a template for customizations.
 
 ### Default keyword search
 
 Per default keywords will be found by these regular expressions:
 
-- `^.*((Description|DisplayText)\(\s*(\".*[^\\]\")\s*\)).*$` (`$3`)
-- `^.*((__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*(\".*[^\\]\")).*$` (`$4`)
-- `^.*(CliApi[^\s]*\([^\)]*Example\s*\=\s*(\".*[^\\]\")).*$` (`$2`)
+- `(Description|DisplayText)\(\s*(\".*[^\\]\")\s*\)`
+- `(__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*(\".*[^\\]\")`
+- `CliApi[^\s]*\([^\)]*Example\s*\=\s*(\".*[^\\]\")`
+- `[^\@\$]\".*[^\\]\".*;.*\/\/.*wan24PoeditParser\:include` (case insensitive)
+
+They'll then be post-processed by these replacing regular expressions:
+
+- `^.*(Description|DisplayText)\(\s*(\".*[^\\]\")\s*\).*$` -> `$2`
+- `^.*(__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*(\".*[^\\]\").*$` -> `$3`
+- `^.*CliApi[^\s]*\([^\)]*Example\s*\=\s*(\".*[^\\]\").*$` -> `$1`
+- `^.*[^\@\$](\".*[^\\]\").*;.*\/\/.*wan24PoeditParser\:include.*$` -> `$1` 
+(case insensitive)
+- `^\s*(\".*[^\\]\").+$` -> `$1`
+
+To force including any string (from a constant definition, for example), 
+simply add a comment `// wan24PoeditParser:include` at the end of the line - 
+example:
+
+```cs
+public const string NAME = "Any PO included keyword";// wan24PoeditParser:include
+```
 
 **NOTE**: (Multiline) concatenated string value definitions (like 
 `"Part a" + "Part b"`) or interpolations can't be parsed. The matched keyword 
@@ -56,14 +87,20 @@ must be C style escaped.
 Command to extract translations:
 
 ```bash
-wan24PoeditParser (-singleThread) (--config "/path/to/wan24PoeditParserConfig.json") (--ext ".ext" ...) --output %o %C %F
+wan24PoeditParser (-singleThread) (-failOnError) (--config "/path/to/customConfig.json") (--ext ".ext" ...) (-mergeOutput) --output %o %C %F
 ```
 
-**NOTE**: The `--config` parameter is optional and used in case you want to 
-define a custom configuration file. Using the optional `-singleThread` you can 
-disable multithreading (it'll override the configuration). The optional 
-`--ext` parameter defines the file extensions to use when walking through a 
-folder tree and overrides the configuration.
+Optional arguments, which will override the default configuration:
+
+| Argument | Description |
+| -------- | ----------- |
+| `--config` | In case you want to load a custom configuration file |
+| `-singleThread`* | Disable multithreading |
+| `--ext`* | File extensions to use when walking through a folder tree |
+| `-mergeOutput`* | Keywords will be merged to the existing output PO file |
+| `-failOnError`* | The whole process will fail on any error |
+
+(*) Will also override the custom configuration, if any
 
 Minimal working example using all default settings:
 
@@ -93,8 +130,7 @@ extractor configuration.
 The configuration allows to define regular expressions, where
 
 - an array with two elements is a regular expression (and its `RegexOptions` 
-enumeration value) which needs to match the string to use, and export the 
-whole match as `$1`
+enumeration value) which needs to match the string to use
 - an array with three elements is used to replace a pattern (the 3rd element 
 is the replacement), if the regular expression does match
 
@@ -113,6 +149,8 @@ Example parser JSON configuration:
 		".ext",
 		...
 	],
+	"MergeOutput": true,// (optional) Merge the extracted keywords to the existing output PO file
+	"FailOnError": true,// (optional) To fail thewhole process on any error
 	"Merge": false// (optional) Set to true to merge your custom configuration with the default configuration
 }
 ```
@@ -123,6 +161,14 @@ replacement matched the search expression string, the full search match will
 be the used keyword.
 
 During merging, lists will be combined, and single options will be overwritten.
+
+There are some more optional keys:
+
+- `Core`: `wan24-Core` configuration using a `AppConfig` structure
+- `CLI`: `wan24-CLI` configuration using a `CliAppConfig` structure
+
+You can find the possible configuration structure in the project repositories 
+on GitHub (and their online developer reference).
 
 ### Parsing from the command line
 

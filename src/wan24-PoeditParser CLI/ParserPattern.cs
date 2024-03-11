@@ -5,7 +5,7 @@ namespace wan24.PoeditParser
     /// <summary>
     /// Poedit parser pattern
     /// </summary>
-    public sealed class ParserPattern
+    public sealed record class ParserPattern
     {
         /// <summary>
         /// Regular expression
@@ -30,7 +30,7 @@ namespace wan24.PoeditParser
         /// <summary>
         /// Regular expression
         /// </summary>
-        public Regex Expression => _Expression ??= new(Pattern, Options);
+        public Regex Expression => _Expression ??= new(Pattern, RegexOptions.Compiled | RegexOptions.Singleline | Options);
 
         /// <summary>
         /// Replacement pattern

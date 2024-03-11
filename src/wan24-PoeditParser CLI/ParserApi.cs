@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Karambolo.PO;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Reflection;
 using System.Text;
@@ -10,17 +11,25 @@ using static wan24.Core.Logging;
 namespace wan24.PoeditParser
 {
     /// <summary>
-    /// Poedit parser CLI API
+    /// PO extractor CLI API
     /// </summary>
-    [CliApi("parser", IsDefault = true)]
-    [DisplayText("Poedit parser")]
-    [Description("CLI API for parsing a PO file from source code")]
+    [CliApi("extractor", IsDefault = true)]
+    [DisplayText("PO extractor")]
+    [Description("CLI API for creating/merging a PO file from source code extracted keywords")]
     public sealed partial class ParserApi
     {
         /// <summary>
         /// Constructor
         /// </summary>
         public ParserApi() { }
+
+        /// <summary>
+        /// Fail on error?
+        /// </summary>
+        [CliApi("failOnError")]
+        [DisplayText("Fail on error")]
+        [Description("Fail the whole process on any error")]
+        public static bool FailOnError { get; set; }
 
         /// <summary>
         /// Parse source code
@@ -35,16 +44,17 @@ namespace wan24.PoeditParser
         /// <param name="exclude">Excluded file-/foldernames (absolute path or filename only)</param>
         /// <param name="output">Output PO filename (may be relative or absolute)</param>
         /// <param name="noHeader">Skip writing a header</param>
-        [CliApi("parse", IsDefault = true)]
-        [DisplayText("Parse")]
-        [Description("Parses a PO file from source code")]
+        /// <param name="mergeOutput">Merge the PO output to the existing PO file?</param>
+        [CliApi("extract", IsDefault = true)]
+        [DisplayText("Extract")]
+        [Description("Creates/merges a PO file from source code extracted keywords")]
         [StdIn("/path/to/source.cs")]
         [StdOut("/path/to/target.po")]
-        public static async Task ParseAsync(
+        public static async Task ExtractAsync(
 
             [CliApi(Example = "/path/to/config.json")]
             [DisplayText("Configuration")]
-            [Description("Path to the custom configuration JSON file to use (may be relative or absolute)")]
+            [Description("Path to the custom configuration JSON file to use (may be relative or absolute, or only a filename to lookup; will look in current directory, app folder and temporary folder)")]
             string? config = null,
 
             [CliApi]
@@ -54,7 +64,7 @@ namespace wan24.PoeditParser
 
             [CliApi]
             [DisplayText("Verbose")]
-            [Description("Write processing details to STDERR (multi-threading will be disabled)")]
+            [Description("Log processing details (to STDERR; multi-threading will be disabled)")]
             bool verbose = false,
 
             [CliApi]
@@ -69,7 +79,7 @@ namespace wan24.PoeditParser
 
             [CliApi(Example = "UTF-8")]
             [DisplayText("Encoding")]
-            [Description("Text encoding of the source files (may be any encoding identifier)")]
+            [Description("Text encoding of the source files (may be any encoding (web) identifier)")]
             string? encoding = null,
 
             [CliApi(Example = "/path/to/source.cs")]
@@ -79,7 +89,7 @@ namespace wan24.PoeditParser
 
             [CliApi(Example = "/path/to/source/sub/folder")]
             [DisplayText("Exclude files/folders")]
-            [Description("Path to excluded source files and folders (absolute path or filename only)")]
+            [Description("Path to excluded source files and folders (absolute or partial path or file-/foldername only (\"*\" (any or none) and \"+\" (one or many) may be used as wildcard); case insensitive)")]
             string[]? exclude = null,
 
             [CliApi(Example = "/path/to/output.po")]
@@ -89,17 +99,28 @@ namespace wan24.PoeditParser
 
             [CliApi]
             [DisplayText("No header")]
-            [Description("Skip writing a header to the PO file")]
-            bool noHeader = false
+            [Description("Skip adding header informations to a new PO file")]
+            bool noHeader = false,
+
+            [CliApi]
+            [DisplayText("Merge output")]
+            [Description("Merge the PO output to the existing output PO file?")]
+            bool mergeOutput = false
 
             )
         {
+            DateTime start = DateTime.Now;// Overall starting time
             // Configure
+            string? configFn = null;// Finally used custom configuration filename
             if (config is not null)
             {
                 // Load custom JSON configuration file
                 if (Trace) WriteTrace($"Loading JSON configuration from \"{config}\"");
-                await AppConfig.LoadAsync<ParserAppConfig>(config).DynamicContext();
+                if (FsHelper.FindFile(config, includeCurrentDirectory: true) is not string fn)
+                    throw new FileNotFoundException("Configuration file not found", config);
+                if (Trace && fn != config) WriteTrace($"Using configuration filename \"{fn}\"");
+                configFn = fn;
+                await AppConfig.LoadAsync<ParserAppConfig>(fn).DynamicContext();
             }
             if (singleThread || verbose)
             {
@@ -114,13 +135,20 @@ namespace wan24.PoeditParser
                 ParserConfig.FileExtensions.Clear();
                 ParserConfig.FileExtensions.AddRange(ext);
             }
+            mergeOutput |= ParserConfig.MergeOutput;
+            if (mergeOutput)
+            {
+                // Merge with the existing PO output file
+                if (Trace) WriteTrace("Merge with existing PO output file (if any)");
+                ParserConfig.MergeOutput = mergeOutput;
+            }
             if (encoding is not null)
             {
                 // Override source encoding
                 if (Trace) WriteTrace($"Override source encoding with \"{encoding}\"");
                 ParserConfig.SourceEncoding = Encoding.GetEncoding(encoding);
             }
-            if (verbose && Logging.Logger is null) Logging.Logger = new VividConsoleLogger(LogLevel.Information);// Ensure having a logger for verbose output
+            if (verbose) Logging.Logger ??= new VividConsoleLogger(LogLevel.Information);// Ensure having a logger for verbose output
             if (!verbose)
             {
                 // Always be verbose if a logger was configured
@@ -130,24 +158,35 @@ namespace wan24.PoeditParser
             if (verbose)
             {
                 // Output the used final settings
-                WriteInfo($"Multithreading: {!ParserConfig.SingleThread}");
+                WriteInfo($"Configuration file: {configFn ?? "(none)"}");
+                WriteInfo($"Multi-threading: {!ParserConfig.SingleThread}");
                 WriteInfo($"Source encoding: {ParserConfig.SourceEncoding.EncodingName}");
                 WriteInfo($"Patterns: {ParserConfig.Patterns.Count}");
                 WriteInfo($"File extensions: {string.Join(", ", ParserConfig.FileExtensions)}");
+                WriteInfo($"Merge to output PO file: {ParserConfig.MergeOutput}");
+                WriteInfo($"Fail on error: {FailOnError || ParserConfig.FailOnError}");
             }
+            if (input is not null && ParserConfig.FileExtensions.Count < 1) throw new InvalidDataException("Missing file extensions to look for");
+            if (!ParserConfig.Patterns.Any(p => p.Replacement is null)) throw new InvalidDataException("Missing matching-only patterns");
+            if (!ParserConfig.Patterns.Any(p => p.Replacement is not null)) throw new InvalidDataException("Missing replace patterns");
             // Process
-            HashSet<ParserMatch> keywords = [];
+            DateTime started = DateTime.Now;// Part start time
+            int sources = 0;// Number of source files parsed
+            HashSet<ParserMatch> keywords = [];// Parsed keywords
             if (input is null)
             {
                 // Use STDIN
                 if (verbose) WriteInfo("Using STDIN");
-                await ProcessAsync(Console.OpenStandardInput(), keywords, verbose).DynamicContext();
+                await ProcessFileAsync(Console.OpenStandardInput(), keywords, verbose).DynamicContext();
+                sources++;
             }
             else
             {
                 // Use given file-/foldernames
                 if (verbose) WriteInfo("Using given file-/foldernames");
-                FileWorker worker = new(ParserConfig.SingleThread ? 1 : Environment.ProcessorCount << 1, keywords, verbose)
+                if (input.Length < 1) throw new ArgumentException("Missing input locations", nameof(input));
+                ParserExcludes excluding = new(exclude ?? []);
+                ParallelFileWorker worker = new(ParserConfig.SingleThread ? 1 : Environment.ProcessorCount << 1, keywords, verbose)
                 {
                     Name = "Poedit parser parallel file worker"
                 };
@@ -161,37 +200,41 @@ namespace wan24.PoeditParser
                     foreach (string path in input)
                     {
                         // Process input file-/foldernames
+                        if (Trace) WriteTrace($"Handling input path \"{path}\"");
                         fullPath = Path.GetFullPath(path);
+                        if (Trace) WriteTrace($"Full input path for \"{path}\" is \"{fullPath}\"");
                         if (Directory.Exists(fullPath))
                         {
                             // Find files in a folder (optional recursive)
-                            if (exclude is not null && exclude.Contains(fullPath))
+                            if (excluding.IsPathExcluded(fullPath))
                             {
-                                if (verbose) WriteInfo($"Folder {fullPath} was excluded");
+                                if (verbose) WriteInfo($"Folder \"{fullPath}\" was excluded");
                                 continue;
                             }
                             files = FsHelper.FindFiles(fullPath, recursive: !noRecursive, extensions: extensions).ToArray();
                             if (files.Length < 1)
                             {
-                                if (verbose) WriteInfo($"Found no files in {fullPath}");
+                                if (verbose) WriteInfo($"Found no files in \"{fullPath}\"");
                                 continue;
                             }
-                            if (verbose) WriteInfo($"Found {files.Length} files in {fullPath}");
+                            if (verbose) WriteInfo($"Found {files.Length} files in \"{fullPath}\"");
                             if (Trace)
                                 foreach (string file in files)
                                     WriteTrace($"Going to process file \"{file}\"");
                             await worker.EnqueueRangeAsync(files).DynamicContext();
+                            sources += files.Length;
                         }
                         else if (File.Exists(fullPath))
                         {
                             // Use a given filename
-                            if (exclude is not null && (exclude.Contains(fullPath) || exclude.Contains(Path.GetFileName(fullPath))))
+                            if (excluding.IsPathExcluded(fullPath))
                             {
-                                if (verbose) WriteInfo($"File {fullPath} was excluded");
+                                if (verbose) WriteInfo($"File \"{fullPath}\" was excluded");
                                 continue;
                             }
-                            if (verbose) WriteInfo($"Add file {fullPath}");
+                            if (verbose) WriteInfo($"Add file \"{fullPath}\"");
                             await worker.EnqueueAsync(fullPath).DynamicContext();
+                            sources++;
                         }
                         else
                         {
@@ -201,42 +244,197 @@ namespace wan24.PoeditParser
                     // Wait until the parallel worker did finish all jobs
                     if (Trace) WriteTrace("Waiting for all files to finish processing");
                     await worker.WaitBoringAsync().DynamicContext();
+                    if (worker.LastException is not null) throw new IOException("Failed to parse input sources", worker.LastException);
                 }
             }
-            if (verbose) WriteInfo($"Done processing input source files (found {keywords.Count} keywords)");
+            if (verbose) WriteInfo($"Done processing input source files (found {keywords.Count} keywords in {sources} parsed source files; took {DateTime.Now - started})");
             // Write output
-            if (verbose) WriteInfo($"Writing the PO output to {(output is null ? "STDOUT" : $"\"{output}\"")}");
-            Stream outputStream = output is null
-                ? Console.OpenStandardOutput()
-                : FsHelper.CreateFileStream(output, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, overwrite: true);
-            await using (outputStream.DynamicContext())
+            started = DateTime.Now;
+            POCatalog catalog;// Final PO catalog
+            MemoryPoolStream? ms = null;// Memory stream for the PO generator
+            Stream? outputStream = null;// Output (file)stream
+            try
             {
-                using StreamWriter writer = new(outputStream, Encoding.UTF8);// PO files use UTF-8 always
-                // Header
-                if (!noHeader)
+                if (mergeOutput && output is not null && File.Exists(output))
                 {
-                    if (verbose) WriteInfo("Writing PO header");
-                    await writer.WriteLineAsync($"# PO file created using wan24PoeditParser").DynamicContext();
-                    await writer.WriteLineAsync($"# https://github.com/nd1012/wan24-PoeditParser").DynamicContext();
-                    await writer.WriteLineAsync($"#").DynamicContext();
-                    await writer.WriteLineAsync($"msgid \"\"").DynamicContext();
-                    await writer.WriteLineAsync($"msgstr \"\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{$"Project-Id-Version: wan24PoeditParser {Assembly.GetExecutingAssembly().GetCustomAttributeCached<AssemblyInformationalVersionAttribute>()?.InformationalVersion}\n".ToPoeditMessageLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{"Report-Msgid-Bugs-To: https://github.com/nd1012/wan24-PoeditParser/issues\n".ToPoeditMessageLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{"MIME-Version: 1.0\n".ToPoeditMessageLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{"Content-Type: text/plain; charset=UTF-8\n".ToPoeditMessageLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{"Content-Transfer-Encoding: 8bit\n".ToPoeditMessageLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{$"X-Generator: wan24PoeditParser {Assembly.GetExecutingAssembly().GetCustomAttributeCached<AssemblyInformationalVersionAttribute>()?.InformationalVersion}\n".ToPoeditMessageLiteral()}\"").DynamicContext();
-                    await writer.WriteLineAsync($"\"{$"X-Poedit-SourceCharset: {ParserConfig.SourceEncoding.WebName}\n".ToPoeditMessageLiteral()}\"").DynamicContext();
+                    // Merge to existing PO file
+                    if (verbose) WriteInfo($"Merging results with existing PO file \"{output}\"");
+                    if (keywords.Count < 1) throw new InvalidDataException("No keywords matched from input sources - won't touch the existing PO output file");
+                    outputStream = FsHelper.CreateFileStream(output, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                    // Load existing PO contents
+                    ms = new();
+                    await outputStream.CopyToAsync(ms).DynamicContext();
+                    ms.Position = 0;
+                    POParseResult result = new POParser().Parse(ms);
+                    ms.SetLength(0);
+                    if (Trace || !result.Success)
+                        foreach (Diagnostic diag in result.Diagnostics)
+                            switch (diag.Severity)
+                            {
+                                case DiagnosticSeverity.Unknown:
+                                    WriteDebug($"PO parser code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                                case DiagnosticSeverity.Information:
+                                    WriteInfo($"PO parser information code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                                case DiagnosticSeverity.Warning:
+                                    WriteWarning($"PO parser warning code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                                case DiagnosticSeverity.Error:
+                                    WriteError($"PO parser error code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                                default:
+                                    WriteWarning($"PO parser {diag.Severity} code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                            }
+                    if (!result.Success)
+                    {
+                        if (System.Diagnostics.Debugger.IsAttached) System.Diagnostics.Debugger.Break();
+                        throw new InvalidDataException($"Failed to read existing PO file \"{output}\" for merging the extraction results");
+                    }
+                    if (verbose && !Trace)
+                        foreach (Diagnostic diag in result.Diagnostics.Where(d => d.Severity > DiagnosticSeverity.Unknown))
+                            switch (diag.Severity)
+                            {
+                                case DiagnosticSeverity.Information:
+                                    WriteInfo($"PO parser information code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                                case DiagnosticSeverity.Warning:
+                                    WriteWarning($"PO parser warning code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                                case DiagnosticSeverity.Error:
+                                    WriteError($"PO parser error code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                                default:
+                                    WriteWarning($"PO parser {diag.Severity} code \"{diag.Code}\", arguments {diag.Args.Length}: {diag}");
+                                    break;
+                            }
+                    if (result.Diagnostics.HasError) FailOnErrorIfRequested();
+                    catalog = result.Catalog;
+                    if (string.IsNullOrWhiteSpace(catalog.Encoding))
+                    {
+                        if (Trace) WriteTrace("Add missing encoding to PO output");
+                        catalog.Encoding = Encoding.UTF8.WebName;
+                    }
+                    else if (Encoding.GetEncoding(catalog.Encoding) != Encoding.UTF8)
+                    {
+                        WriteWarning($"PO encoding was set to \"{catalog.Encoding}\", which might cause encoding problems");
+                    }
+                    // Handle obsolete keywords
+                    int obsolete = 0;// Number of removed obsolete keywords
+                    foreach (POKey key in catalog.Keys.Where(k => !keywords.Any(kw => kw.Keyword == k.Id)).ToArray())
+                    {
+                        if (Trace) WriteTrace($"Removing obsolete keyword \"{key.Id.ToLiteral()}\"");
+                        catalog.Remove(key);
+                        obsolete++;
+                    }
+                    // Merge catalog with our results
+                    int newKeywords = 0,// Number of new keywords
+                        existingKeywords = 0;// Number of updated keywords
+                    foreach (ParserMatch match in keywords)
+                        if (catalog.TryGetValue(new(match.Keyword), out IPOEntry? entry))
+                        {
+                            // Update existing entry
+                            if (Trace) WriteTrace($"Keyword \"{match.KeywordLiteral}\" found at {match.Positions.Count} position(s) exists already - updating references comment only");
+                            if (entry.Comments is null)
+                            {
+                                entry.Comments = [
+                                    new POReferenceComment()
+                                    {
+                                        References = new List<POSourceReference>(match.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
+                                    }
+                                ];
+                            }
+                            else
+                            {
+                                if (entry.Comments.FirstOrDefault(c => c is POReferenceComment) is POComment referenceComment)
+                                    entry.Comments.Remove(referenceComment);
+                                entry.Comments.Add(new POReferenceComment()
+                                {
+                                    References = new List<POSourceReference>(match.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
+                                });
+                            }
+                            existingKeywords++;
+                        }
+                        else
+                        {
+                            // Create new entry
+                            if (Trace) WriteTrace($"Adding new keyword \"{match.KeywordLiteral}\" found at {match.Positions.Count} position(s)");
+                            catalog.Add(new POSingularEntry(new(match.Keyword))
+                            {
+                                Comments = [
+                                    new POReferenceComment()
+                                    {
+                                        References = new List<POSourceReference>(match.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
+                                    }
+                                ],
+                                Translation = string.Empty
+                            });
+                            newKeywords++;
+                        }
+                    if (verbose) WriteInfo($"Merging PO contents done ({newKeywords} keywords added, {existingKeywords} updated, {obsolete} obsolete keywords removed)");
+                    // Write final PO contents
+                    if (Trace) WriteTrace($"Writing new PO contents to the existing PO output file \"{output}\"");
+                    outputStream.SetLength(0);
                 }
-                // Found keywords
-                foreach (ParserMatch match in keywords)
+                else
                 {
-                    if (verbose) WriteInfo($"Writing keyword \"{match.Keyword.ToPoeditMessageLiteral()}\"");
-                    await WriteEntryAsync(writer, match).DynamicContext();
+                    // Create new PO file or write to STDOUT
+                    if (verbose) WriteInfo($"Writing the PO output to {(output is null ? "STDOUT" : $"\"{output}\"")}");
+                    outputStream = output is null
+                        ? Console.OpenStandardOutput()
+                        : FsHelper.CreateFileStream(output, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, overwrite: true);
+                    // Entries
+                    catalog = new(keywords.Select(k => new POSingularEntry(new(k.Keyword))
+                    {
+                        Comments = [
+                            new POReferenceComment()
+                            {
+                                References = new List<POSourceReference>(k.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
+                            }
+                        ],
+                        Translation = string.Empty
+                    }))
+                    {
+                        Encoding = Encoding.UTF8.WebName
+                    };
+                    // Header
+                    if (!noHeader)
+                    {
+                        if (verbose) WriteInfo("Adding PO header");
+                        catalog.HeaderComments = [
+                            new POTranslatorComment()
+                            {
+                                Text = "wan24PoeditParser"
+                            }
+                        ];
+                        catalog.Headers = new Dictionary<string, string>()
+                        {
+                            { "Project-Id-Version", $"wan24PoeditParser {Assembly.GetExecutingAssembly().GetCustomAttributeCached<AssemblyInformationalVersionAttribute>()?.InformationalVersion}" },
+                            { "Report-Msgid-Bugs-To", "https://github.com/nd1012/wan24-PoeditParser/issues" },
+                            { "MIME-Version", "1.0" },
+                            { "Content-Type", "text/plain; charset=UTF-8" },
+                            { "Content-Transfer-Encoding", "8bit" },
+                            { "X-Generator", $"wan24PoeditParser {Assembly.GetExecutingAssembly().GetCustomAttributeCached<AssemblyInformationalVersionAttribute>()?.InformationalVersion}" },
+                            { "X-Poedit-SourceCharset", ParserConfig.SourceEncoding.WebName },
+                        };
+                    }
+                    // Save the PO contents
+                    if (Trace) WriteTrace($"Writing PO contents to {(output is null ? "STDOUT" : $"the output PO file \"{output}\"")}");
                 }
+                // Generate PO
+                ms ??= new();
+                using (TextWriter writer = new StreamWriter(ms, Encoding.UTF8, leaveOpen: true))
+                    new POGenerator().Generate(writer, catalog);
+                ms.Position = 0;
+                await ms.CopyToAsync(outputStream).DynamicContext();
+                if (verbose) WriteInfo($"Done writing the PO output with {catalog.Count} entries (took {DateTime.Now - started}; total runtime {DateTime.Now - start})");
             }
-            if (verbose) WriteInfo("Done writing the PO output");
+            finally
+            {
+                ms?.Dispose();
+                if (outputStream is not null) await outputStream.DisposeAsync().DynamicContext();
+            }
         }
     }
 }
