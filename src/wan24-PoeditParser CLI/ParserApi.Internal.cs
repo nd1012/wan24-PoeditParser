@@ -1,4 +1,5 @@
-﻿using System.Collections.Frozen;
+﻿using FuzzySharp;
+using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.Text.RegularExpressions;
@@ -135,6 +136,28 @@ namespace wan24.PoeditParser
             if (FailOnError || ParserConfig.FailOnError)
                 throw new InvalidDataException("Forced to fail in total on any error");
         }
+
+        /// <summary>
+        /// Fuzzy keyword lookup
+        /// </summary>
+        /// <param name="newKeyword">New keyword</param>
+        /// <param name="existingKeywords">Existing keywords</param>
+        /// <param name="minWeight">Minimum weight in percent</param>
+        /// <returns>Best matching existing keyword</returns>
+        private static string? FuzzyKeywordLookup(
+            string newKeyword,
+            in IEnumerable<string> existingKeywords,
+            int minWeight
+            )
+            => newKeyword.Length < 1
+                ? null
+                : existingKeywords
+                    .Where(keyword => keyword.Length > 0)
+                    .Select(keyword => (keyword, Fuzz.WeightedRatio(newKeyword, keyword)))
+                    .Where(info => info.Item2 <= minWeight)
+                    .OrderBy(info => info.Item2)
+                    .Select(info => info.keyword)
+                    .FirstOrDefault() ?? null;
 
         /// <summary>
         /// File worker

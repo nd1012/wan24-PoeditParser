@@ -330,7 +330,8 @@ namespace wan24.PoeditParser
                     // Merge catalog with our results
                     int newKeywords = 0,// Number of new keywords
                         existingKeywords = 0,// Number of updated keywords
-                        fuzzyKeywords = 0;// Number of fuzzy logic updated keywords
+                        fuzzyKeywords = 0,// Number of fuzzy logic updated keywords
+                        minWeight = fuzzy > 0 ? 100 - fuzzy : 0;// Minimum weight for fuzzy keyword lookup
                     string[] catalogKeywords = [.. catalog.Keys.Select(k => k.Id)];// Existing catalog keywords
                     POReferenceComment referencesComment;// Keyword references comment
                     POFlagsComment fuzzyFlagComment = new()// Fuzzy logic updated keyword flag comment
@@ -367,7 +368,7 @@ namespace wan24.PoeditParser
                             existingKeywords++;
                             continue;
                         }
-                        else if (fuzzy > 0 && catalogKeywords.Length > 0 && FuzzyKeywordLookup(match.Keyword, catalogKeywords, fuzzy) is string fuzzyKeyword)
+                        else if (fuzzy > 0 && catalogKeywords.Length > 0 && FuzzyKeywordLookup(match.Keyword, catalogKeywords, minWeight) is string fuzzyKeyword)
                         {
                             // Fuzzy keyword update
                             if (Trace) WriteTrace($"Keyword \"{match.KeywordLiteral}\" at {match.Positions.Count} position(s) exists already (found by fuzzy matching) - updating the entry \"{fuzzyKeyword.ToLiteral()}\"");

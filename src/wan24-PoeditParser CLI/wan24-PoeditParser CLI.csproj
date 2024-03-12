@@ -24,9 +24,6 @@
     <PackAsTool>True</PackAsTool>
     <ToolCommandName>wan24PoeditParser</ToolCommandName>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-    <DebugType>embedded</DebugType>
-    <EmbedAllSources>true</EmbedAllSources>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Trunk|AnyCPU'">
@@ -38,6 +35,7 @@
   </Target>
 
   <ItemGroup>
+    <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="GetText.NET" Version="1.9.14" />
     <PackageReference Include="Karambolo.PO" Version="1.11.0" />
     <PackageReference Include="Stream-Serializer-Extensions" Version="3.5.0" Condition="'$(Configuration)' != 'Trunk'" />
