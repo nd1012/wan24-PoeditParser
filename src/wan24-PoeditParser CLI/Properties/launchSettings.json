@@ -2,7 +2,7 @@
   "profiles": {
     "wan24-PoeditParser CLI": {
       "commandName": "Project",
-      "commandLineArgs": "--input \"../../../../../../wan24-Core/\" --output test.po -verbose"
+      "commandLineArgs": "help -details --api i8n"
     }
   }
 }

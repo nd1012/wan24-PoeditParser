@@ -44,7 +44,8 @@ namespace wan24.PoeditParser
         /// <param name="exclude">Excluded file-/foldernames (absolute path or filename only)</param>
         /// <param name="output">Output PO filename (may be relative or absolute)</param>
         /// <param name="noHeader">Skip writing a header</param>
-        /// <param name="mergeOutput">Merge the PO output to the existing PO file?</param>
+        /// <param name="mergeOutput">Merge the PO output to the existing PO file</param>
+        /// <param name="fuzzy">Maximum updated key Levenshtein distance in percent (only when merging; default is 10; set to zero to disable fuzzy matching)</param>
         [CliApi("extract", IsDefault = true)]
         [DisplayText("Extract")]
         [Description("Creates/merges a PO file from source code extracted keywords")]
@@ -104,11 +105,17 @@ namespace wan24.PoeditParser
 
             [CliApi]
             [DisplayText("Merge output")]
-            [Description("Merge the PO output to the existing output PO file?")]
-            bool mergeOutput = false
+            [Description("Merge the PO output to the existing output PO file")]
+            bool mergeOutput = false,
+
+            [CliApi(Example = "10", ParseJson = true)]
+            [DisplayText("Fuzzy factor")]
+            [Description("Maximum keyword Levenshtein distance in percent to update and mark an existing entry with the fuzzy flag (only when merging; default is 10; set to zero to disable fuzzy matching)")]
+            int fuzzy = 10
 
             )
         {
+            if (fuzzy < 0 || fuzzy > 100) throw new ArgumentOutOfRangeException(nameof(fuzzy));
             DateTime start = DateTime.Now;// Overall starting time
             // Configure
             string? configFn = null;// Finally used custom configuration filename
@@ -252,7 +259,7 @@ namespace wan24.PoeditParser
             started = DateTime.Now;
             POCatalog catalog;// Final PO catalog
             MemoryPoolStream? ms = null;// Memory stream for the PO generator
-            Stream? outputStream = null;// Output (file)stream
+            Stream? outputStream = null;// Output (file?)stream
             try
             {
                 if (mergeOutput && output is not null && File.Exists(output))
@@ -320,59 +327,117 @@ namespace wan24.PoeditParser
                     {
                         WriteWarning($"PO encoding was set to \"{catalog.Encoding}\", which might cause encoding problems");
                     }
-                    // Handle obsolete keywords
-                    int obsolete = 0;// Number of removed obsolete keywords
-                    foreach (POKey key in catalog.Keys.Where(k => !keywords.Any(kw => kw.Keyword == k.Id)).ToArray())
-                    {
-                        if (Trace) WriteTrace($"Removing obsolete keyword \"{key.Id.ToLiteral()}\"");
-                        catalog.Remove(key);
-                        obsolete++;
-                    }
                     // Merge catalog with our results
                     int newKeywords = 0,// Number of new keywords
-                        existingKeywords = 0;// Number of updated keywords
+                        existingKeywords = 0,// Number of updated keywords
+                        fuzzyKeywords = 0;// Number of fuzzy logic updated keywords
+                    string[] catalogKeywords = [.. catalog.Keys.Select(k => k.Id)];// Existing catalog keywords
+                    POReferenceComment referencesComment;// Keyword references comment
+                    POFlagsComment fuzzyFlagComment = new()// Fuzzy logic updated keyword flag comment
+                    {
+                        Flags = new HashSet<string>()
+                        {
+                            "fuzzy"
+                        }
+                    };
                     foreach (ParserMatch match in keywords)
+                    {
+                        referencesComment = new()
+                        {
+                            References = new List<POSourceReference>(match.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
+                        };
                         if (catalog.TryGetValue(new(match.Keyword), out IPOEntry? entry))
                         {
                             // Update existing entry
                             if (Trace) WriteTrace($"Keyword \"{match.KeywordLiteral}\" found at {match.Positions.Count} position(s) exists already - updating references comment only");
                             if (entry.Comments is null)
                             {
-                                entry.Comments = [
-                                    new POReferenceComment()
-                                    {
-                                        References = new List<POSourceReference>(match.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
-                                    }
-                                ];
+                                if (Trace) WriteTrace("Creating comments");
+                                entry.Comments = [ referencesComment ];
                             }
                             else
                             {
                                 if (entry.Comments.FirstOrDefault(c => c is POReferenceComment) is POComment referenceComment)
-                                    entry.Comments.Remove(referenceComment);
-                                entry.Comments.Add(new POReferenceComment()
                                 {
-                                    References = new List<POSourceReference>(match.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
-                                });
+                                    if (Trace) WriteTrace("Removing previous references");
+                                    entry.Comments.Remove(referenceComment);
+                                }
+                                entry.Comments.Add(referencesComment);
                             }
                             existingKeywords++;
+                            continue;
                         }
-                        else
+                        else if (fuzzy > 0 && catalogKeywords.Length > 0 && FuzzyKeywordLookup(match.Keyword, catalogKeywords, fuzzy) is string fuzzyKeyword)
                         {
-                            // Create new entry
-                            if (Trace) WriteTrace($"Adding new keyword \"{match.KeywordLiteral}\" found at {match.Positions.Count} position(s)");
-                            catalog.Add(new POSingularEntry(new(match.Keyword))
-                            {
-                                Comments = [
-                                    new POReferenceComment()
+                            // Fuzzy keyword update
+                            if (Trace) WriteTrace($"Keyword \"{match.KeywordLiteral}\" at {match.Positions.Count} position(s) exists already (found by fuzzy matching) - updating the entry \"{fuzzyKeyword.ToLiteral()}\"");
+                            IPOEntry fuzzyEntry = catalog[new POKey(fuzzyKeyword)],
+                                newEntry = fuzzyEntry is POSingularEntry singular
+                                    ? new POSingularEntry(new(match.Keyword))
                                     {
-                                        References = new List<POSourceReference>(match.Positions.Select(p => new POSourceReference(p.FileName ?? "STDIN", p.LineNumber)))
+                                        Comments = fuzzyEntry.Comments,
+                                        Translation = singular.Translation
                                     }
-                                ],
-                                Translation = string.Empty
+                                    : new POPluralEntry(new(match.Keyword), fuzzyEntry)
+                                    {
+                                        Comments = fuzzyEntry.Comments,
+                                    };
+                            if (newEntry.Comments is null)
+                            {
+                                // Create comments
+                                if (Trace) WriteTrace("Creating comments");
+                                newEntry.Comments = [referencesComment, fuzzyFlagComment];
+                            }
+                            else if(newEntry.Comments.FirstOrDefault(c => c is POFlagsComment) is POFlagsComment flagsComment)
+                            {
+                                // Add fuzzy flag
+                                if (!flagsComment.Flags.Contains("fuzzy"))
+                                {
+                                    if (Trace) WriteTrace("Ading fuzzy flag");
+                                    flagsComment.Flags.Add("fuzzy");
+                                }
+                            }
+                            else
+                            {
+                                // Add fuzzy flag comment
+                                if (Trace) WriteTrace("Adding fuzzy flag comment");
+                                newEntry.Comments.Add(fuzzyFlagComment);
+                            }
+                            if (newEntry.Comments.FirstOrDefault(c => c is POPreviousValueComment pvc && pvc.IdKind == POIdKind.Id) is POComment pvComment)
+                            {
+                                // Remove old previous value comment
+                                if (Trace) WriteTrace("Removing old previous value comment");
+                                newEntry.Comments.Remove(pvComment);
+                            }
+                            newEntry.Comments.Add(new POPreviousValueComment()
+                            {
+                                IdKind = POIdKind.Id,
+                                Value = fuzzyEntry.Key.Id
                             });
-                            newKeywords++;
+                            // Exchange the entry
+                            catalog.Remove(fuzzyEntry.Key);
+                            catalog.Add(newEntry);
+                            fuzzyKeywords++;
+                            continue;
                         }
-                    if (verbose) WriteInfo($"Merging PO contents done ({newKeywords} keywords added, {existingKeywords} updated, {obsolete} obsolete keywords removed)");
+                        // Create new entry
+                        if (Trace) WriteTrace($"Adding new keyword \"{match.KeywordLiteral}\" found at {match.Positions.Count} position(s)");
+                        catalog.Add(new POSingularEntry(new(match.Keyword))
+                        {
+                            Comments = [ referencesComment ],
+                            Translation = string.Empty
+                        });
+                        newKeywords++;
+                    }
+                    // Handle obsolete keywords
+                    int obsolete = 0;// Number of removed obsolete keywords
+                    foreach (IPOEntry entry in catalog.Values.Where(entry => !keywords.Any(kw => kw.Keyword == entry.Key.Id)).ToArray())
+                    {
+                        if (Trace) WriteTrace($"Removing obsolete keyword \"{entry.Key.Id.ToLiteral()}\"");
+                        catalog.Remove(entry);
+                        obsolete++;
+                    }
+                    if (verbose) WriteInfo($"Merging PO contents done ({newKeywords} keywords added, {existingKeywords} updated, {fuzzyKeywords} fuzzy updates, {obsolete} obsolete keywords removed)");
                     // Write final PO contents
                     if (Trace) WriteTrace($"Writing new PO contents to the existing PO output file \"{output}\"");
                     outputStream.SetLength(0);

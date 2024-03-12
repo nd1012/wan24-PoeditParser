@@ -17,55 +17,55 @@ namespace wan24.PoeditParser
                 // Attributes
                 new ParserPattern()
                 {
-                    Pattern= @"(Description|DisplayText)\(\s*\"".*[^\\]\""\s*\)",
+                    Pattern = @"(Description|DisplayText)\(\s*\"".*[^\\]\""\s*\)",
                     Options = RegexOptions.None
                 },
                 new ParserPattern()
                 {
-                    Pattern= @"^.*(Description|DisplayText)\(\s*(\"".*[^\\]\"")\s*\).*$",
+                    Pattern = @"^.*(Description|DisplayText)\(\s*(\"".*[^\\]\"")\s*\).*$",
                     Options = RegexOptions.None,
                     Replacement = "$2"
                 },
                 // Translation methods
                 new ParserPattern()
                 {
-                    Pattern= @"(__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*\"".*[^\\]\""",
+                    Pattern = @"(__?|gettextn?|Translate(Plural)?|GetTerm|StdIn|StdOut)\(\s*\"".*[^\\]\""",
                     Options = RegexOptions.None
                 },
                 new ParserPattern()
                 {
-                    Pattern= @"^.*(__?|gettextn?|Translate(Plural)?|GetTerm)\(\s*(\"".*[^\\]\"").*$",
+                    Pattern = @"^.*(__?|gettextn?|Translate(Plural)?|GetTerm|StdIn|StdOut)\(\s*(\"".*[^\\]\"").*$",
                     Options = RegexOptions.None,
                     Replacement = "$3"
                 },
                 // CliApi attribute examples
                 new ParserPattern()
                 {
-                    Pattern= @"CliApi[^\s]*\([^\)]*Example\s*\=\s*\"".*[^\\]\""",
+                    Pattern = @"CliApi[^\s]*\([^\)]*Example\s*\=\s*\"".*[^\\]\""",
                     Options = RegexOptions.None
                 },
                 new ParserPattern()
                 {
-                    Pattern= @"^.*CliApi[^\s]*\([^\)]*Example\s*\=\s*(\"".*[^\\]\"").*$",
+                    Pattern = @"^.*CliApi[^\s]*\([^\)]*Example\s*\=\s*(\"".*[^\\]\"").*$",
                     Options = RegexOptions.None,
                     Replacement = "$1"
                 },
                 // Forced strings
                 new ParserPattern()
                 {
-                    Pattern= @"[^\@\$]\"".*[^\\]\"".*;.*\/\/.*wan24PoeditParser\:include",
+                    Pattern = @"[^\@\$]\"".*[^\\]\"".*;.*\/\/.*wan24PoeditParser\:include",
                     Options = RegexOptions.IgnoreCase
                 },
                 new ParserPattern()
                 {
-                    Pattern= @"^.*[^\@\$](\"".*[^\\]\"").*;.*\/\/.*wan24PoeditParser\:include.*$",
+                    Pattern = @"^.*[^\@\$](\"".*[^\\]\"").*;.*\/\/.*wan24PoeditParser\:include.*$",
                     Options = RegexOptions.IgnoreCase,
                     Replacement = "$1"
                 },
                 // Cut the tail of multiple possible keywords within one line to get only one, finally
                 new ParserPattern()
                 {
-                    Pattern= @"^\s*(\"".*[^\\]\"").+$",
+                    Pattern = @"^\s*(\"".*[^\\]\"").+$",
                     Options = RegexOptions.None,
                     Replacement = "$1"
                 }

@@ -12,11 +12,11 @@
 			"$2"
 		],
 		[
-			"(__?|gettextn?|Translate(Plural)?|GetTerm)\\(\\s*\\\".*[^\\\\]\\\"",
+			"(__?|gettextn?|Translate(Plural)?|GetTerm|StdIn|StdOut)\\(\\s*\\\".*[^\\\\]\\\"",
 			"None"
 		],
 		[
-			"^.*(__?|gettextn?|Translate(Plural)?|GetTerm)\\(\\s*(\\\".*[^\\\\]\\\").*$",
+			"^.*(__?|gettextn?|Translate(Plural)?|GetTerm|StdIn|StdOut)\\(\\s*(\\\".*[^\\\\]\\\").*$",
 			"None",
 			"$3"
 		],

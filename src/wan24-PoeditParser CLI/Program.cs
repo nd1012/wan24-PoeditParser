@@ -7,4 +7,4 @@ CliConfig.Apply(new(args));
 Translation.Current ??= Translation.Dummy;
 CliApi.CommandLine = "wan24PoeditParser";
 CliApi.HelpHeader = "wan24-PoeditParser help\n(c) 2024 Andreas Zimmermann, wan24.de";
-return await CliApi.RunAsync(args, exportedApis: [typeof(CliHelpApi), typeof(ParserApi)]);
+return await CliApi.RunAsync(args, exportedApis: [typeof(CliHelpApi), typeof(ParserApi), typeof(I8NApi)]).DynamicContext();

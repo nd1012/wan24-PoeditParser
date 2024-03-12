@@ -26,6 +26,21 @@ namespace wan24.PoeditParser
         public static ParserAppConfig? AppliedPoeditConfig { get; private set; }
 
         /// <summary>
+        /// Apply a configuration from the CLI configuration
+        /// </summary>
+        [CliConfig]
+        public static string ApplyConfig
+        {
+            set
+            {
+                using FileStream fs = FsHelper.CreateFileStream(value, FileMode.Open, FileAccess.Read, FileShare.Read);
+                ParserAppConfig config = JsonHelper.Decode<ParserAppConfig>(fs)
+                    ?? throw new InvalidDataException($"Failed to decode parser app config from file \"{fs}\"");
+                config.Apply();
+            }
+        }
+
+        /// <summary>
         /// Core app configuration
         /// </summary>
         public AppConfig? Core { get; set; }
