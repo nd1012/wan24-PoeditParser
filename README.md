@@ -1,5 +1,8 @@
 # wan24-PoeditParser
 
+**NOTE**: This project has been archived and will be continued as 
+`wan24-I8NTool` [here](https://github.com/nd1012/wan24-I8NTool).
+
 This is a small dotnet tool for parsing source code for gettext strings and 
 writing the result in the PO format to a file or STDOUT.
 
