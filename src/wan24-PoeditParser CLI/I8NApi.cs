@@ -13,6 +13,11 @@ namespace wan24.PoeditParser
     public sealed partial class I8NApi
     {
         /// <summary>
+        /// i8n file structure header byte compression flag (bit 8)
+        /// </summary>
+        public const int HEADER_COMPRESSION_FLAG = 128;
+
+        /// <summary>
         /// Constructor
         /// </summary>
         public I8NApi() { }

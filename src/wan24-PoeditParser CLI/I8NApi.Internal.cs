@@ -24,13 +24,21 @@ namespace wan24.PoeditParser
         /// <param name="terms">Terms</param>
         /// <param name="failOnExistingKey">To fail, if an existing key would be overwritten by an additional source</param>
         /// <param name="verbose">Verbose</param>
-        private static async Task ReadJsonSourceAsync(Stream source, string? fn, Dictionary<string, string[]> terms, bool failOnExistingKey, bool verbose)
+        /// <param name="cancellationToken">Cancellation token</param>
+        private static async Task ReadJsonSourceAsync(
+            Stream source, 
+            string? fn, 
+            Dictionary<string, string[]> terms, 
+            bool failOnExistingKey, 
+            bool verbose,
+            CancellationToken cancellationToken = default
+            )
         {
             int newTerms = 0,
                 overwrittenTerms = 0;
             await using (source.DynamicContext())
             {
-                Dictionary<string, string[]> t = await JsonHelper.DecodeAsync<Dictionary<string, string[]>>(source).DynamicContext()
+                Dictionary<string, string[]> t = await JsonHelper.DecodeAsync<Dictionary<string, string[]>>(source, cancellationToken).DynamicContext()
                     ?? throw new InvalidDataException($"Failed to read JSON dictionary from {(fn is null ? "STDIN" : $"source file \"{fn}\"")}");
                 if (verbose) WriteInfo($"Found {t.Count} terms");
                 foreach (string key in t.Keys)
@@ -62,6 +70,7 @@ namespace wan24.PoeditParser
         /// <param name="terms">Terms</param>
         /// <param name="failOnExistingKey">To fail, if an existing key would be overwritten by an additional source</param>
         /// <param name="verbose">Verbose</param>
+        /// <param name="cancellationToken">Cancellation token</param>
         private static async Task ReadPoSourceAsync(
             Stream source,
             string? fn,
@@ -69,7 +78,8 @@ namespace wan24.PoeditParser
             MemoryPoolStream ms,
             Dictionary<string, string[]> terms,
             bool failOnExistingKey,
-            bool verbose
+            bool verbose,
+            CancellationToken cancellationToken = default
             )
         {
             POParseResult result;
@@ -77,7 +87,7 @@ namespace wan24.PoeditParser
                 overwrittenTerms = 0;
             await using (source.DynamicContext())
             {
-                await source.CopyToAsync(ms).DynamicContext();
+                await source.CopyToAsync(ms, cancellationToken).DynamicContext();
                 ms.Position = 0;
                 result = parser.Parse(ms);
                 ms.SetLength(0);
@@ -158,6 +168,7 @@ namespace wan24.PoeditParser
         /// <param name="terms">Terms</param>
         /// <param name="failOnExistingKey">To fail, if an existing key would be overwritten by an additional source</param>
         /// <param name="verbose">Verbose</param>
+        /// <param name="cancellationToken">Cancellation token</param>
         private static async Task ReadMoSourceAsync(
             Stream source,
             string? fn,
@@ -165,7 +176,8 @@ namespace wan24.PoeditParser
             MemoryPoolStream ms,
             Dictionary<string, string[]> terms,
             bool failOnExistingKey,
-            bool verbose
+            bool verbose,
+            CancellationToken cancellationToken = default
             )
         {
             MoFile mo;
@@ -173,7 +185,7 @@ namespace wan24.PoeditParser
                 overwrittenTerms = 0;
             await using (source.DynamicContext())
             {
-                await source.CopyToAsync(ms).DynamicContext();
+                await source.CopyToAsync(ms, cancellationToken).DynamicContext();
                 ms.Position = 0;
                 mo = parser.Parse(ms);
                 ms.SetLength(0);
@@ -222,8 +234,8 @@ namespace wan24.PoeditParser
                     // Require header
                     if (Trace) WriteTrace("Reading header");
                     byte header = await source.ReadOneByteAsync().DynamicContext();
-                    compressed = (header & 128) == 128;
-                    version = header & ~128;
+                    compressed = (header & HEADER_COMPRESSION_FLAG) == HEADER_COMPRESSION_FLAG;
+                    version = header & ~HEADER_COMPRESSION_FLAG;
                     if (Trace) WriteTrace($"Red header {header} (version {version}, compressed: {compressed})");
                     if (version > VERSION) throw new InvalidDataException($"Can't read file version #{version} (compressed: {compressed})");
                     if (uncompress && !compressed)
@@ -276,12 +288,17 @@ namespace wan24.PoeditParser
         }
 
         /// <summary>
+        /// Determine if to fail the whole process on any error
+        /// </summary>
+        /// <returns>If to fail on any error</returns>
+        private static bool DoFailOnError() => FailOnError || ParserConfig.FailOnError;
+
+        /// <summary>
         /// Fail on error, if requested
         /// </summary>
         private static void FailOnErrorIfRequested()
         {
-            if (FailOnError || ParserConfig.FailOnError)
-                throw new InvalidDataException("Forced to fail in total on any error");
+            if (DoFailOnError()) throw new InvalidDataException("Forced to fail in total on any error");
         }
     }
 }

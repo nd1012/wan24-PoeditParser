@@ -41,12 +41,24 @@ namespace wan24.PoeditParser
                 // CliApi attribute examples
                 new ParserPattern()
                 {
-                    Pattern = @"CliApi[^\s]*\([^\)]*Example\s*\=\s*\"".*[^\\]\""",
+                    Pattern = @"CliApi[^\(]*\([^\)]*Example\s*\=\s*\"".*[^\\]\""",
                     Options = RegexOptions.None
                 },
                 new ParserPattern()
                 {
-                    Pattern = @"^.*CliApi[^\s]*\([^\)]*Example\s*\=\s*(\"".*[^\\]\"").*$",
+                    Pattern = @"^.*CliApi[^\(]*\([^\)]*Example\s*\=\s*(\"".*[^\\]\"").*$",
+                    Options = RegexOptions.None,
+                    Replacement = "$1"
+                },
+                // ExitCode attribute examples
+                new ParserPattern()
+                {
+                    Pattern = @"ExitCode[^\(]*\(\d+,\s*\"".*[^\\]\""",
+                    Options = RegexOptions.None
+                },
+                new ParserPattern()
+                {
+                    Pattern = @"^.*ExitCode[^\(]*\(\d+,\s*(\"".*[^\\]\"").*$",
                     Options = RegexOptions.None,
                     Replacement = "$1"
                 },

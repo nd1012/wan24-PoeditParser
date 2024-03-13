@@ -24,6 +24,7 @@
     <PackAsTool>True</PackAsTool>
     <ToolCommandName>wan24PoeditParser</ToolCommandName>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Trunk|AnyCPU'">

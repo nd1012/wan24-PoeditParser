@@ -110,12 +110,12 @@ namespace wan24.PoeditParser
 
             [CliApi(Example = "10", ParseJson = true)]
             [DisplayText("Fuzzy factor")]
-            [Description("Maximum keyword Levenshtein distance in percent to update and mark an existing entry with the fuzzy flag (only when merging; default is 10; set to zero to disable fuzzy matching)")]
-            int fuzzy = 10
+            [Description("Maximum old/new keyword distance in percent to update and mark an existing entry with the fuzzy flag (only when merging)")]
+            int fuzzy = 0
 
             )
         {
-            if (fuzzy < 0 || fuzzy > 100) throw new ArgumentOutOfRangeException(nameof(fuzzy));
+            if (fuzzy < 0 || fuzzy > 99) throw new ArgumentOutOfRangeException(nameof(fuzzy));
             DateTime start = DateTime.Now;// Overall starting time
             // Configure
             string? configFn = null;// Finally used custom configuration filename
@@ -167,8 +167,10 @@ namespace wan24.PoeditParser
                 // Output the used final settings
                 WriteInfo($"Configuration file: {configFn ?? "(none)"}");
                 WriteInfo($"Multi-threading: {!ParserConfig.SingleThread}");
+                WriteInfo($"Number of threads: {(ParserConfig.SingleThread ? 1 : Environment.ProcessorCount << 1)}");
                 WriteInfo($"Source encoding: {ParserConfig.SourceEncoding.EncodingName}");
                 WriteInfo($"Patterns: {ParserConfig.Patterns.Count}");
+                WriteInfo($"Fuzzy distance: {fuzzy}");
                 WriteInfo($"File extensions: {string.Join(", ", ParserConfig.FileExtensions)}");
                 WriteInfo($"Merge to output PO file: {ParserConfig.MergeOutput}");
                 WriteInfo($"Fail on error: {FailOnError || ParserConfig.FailOnError}");
@@ -192,7 +194,7 @@ namespace wan24.PoeditParser
                 // Use given file-/foldernames
                 if (verbose) WriteInfo("Using given file-/foldernames");
                 if (input.Length < 1) throw new ArgumentException("Missing input locations", nameof(input));
-                ParserExcludes excluding = new(exclude ?? []);
+                PathMatching excluding = new(exclude ?? []);
                 ParallelFileWorker worker = new(ParserConfig.SingleThread ? 1 : Environment.ProcessorCount << 1, keywords, verbose)
                 {
                     Name = "Poedit parser parallel file worker"
@@ -213,7 +215,7 @@ namespace wan24.PoeditParser
                         if (Directory.Exists(fullPath))
                         {
                             // Find files in a folder (optional recursive)
-                            if (excluding.IsPathExcluded(fullPath))
+                            if (excluding.IsMatch(fullPath))
                             {
                                 if (verbose) WriteInfo($"Folder \"{fullPath}\" was excluded");
                                 continue;
@@ -234,7 +236,7 @@ namespace wan24.PoeditParser
                         else if (File.Exists(fullPath))
                         {
                             // Use a given filename
-                            if (excluding.IsPathExcluded(fullPath))
+                            if (excluding.IsMatch(fullPath))
                             {
                                 if (verbose) WriteInfo($"File \"{fullPath}\" was excluded");
                                 continue;

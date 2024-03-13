@@ -27,6 +27,7 @@ namespace wan24.PoeditParser
         /// <param name="noHeader">To skip writing a header with the version number and the compression flag</param>
         /// <param name="verbose">Write verbose informations to STDERR</param>
         /// <param name="failOnExistingKey">To fail, if an existing key would be overwritten by an additional source</param>
+        /// <param name="cancellationToken">Cancellation token</param>
         [CliApi("build", IsDefault = true)]
         [DisplayText("Build i8n file")]
         [Description("Build an internationalization (i8n) file from JSON (UTF-8) and/or PO/MO (gettext) source files")]
@@ -87,24 +88,34 @@ namespace wan24.PoeditParser
             [CliApi]
             [DisplayText("Fail on existing key")]
             [Description("To fail, if an existing key would be overwritten by an additional source")]
-            bool failOnExistingKey = false
+            bool failOnExistingKey = false,
+
+            CancellationToken cancellationToken = default
 
             )
         {
             verbose |= Trace;
-            if (Trace) WriteTrace("Creating internationalization file");
+            if (Trace) WriteTrace($"Creating internationalization to {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
             int stdInCnt = 0;
             if (json) stdInCnt++;
             if (po) stdInCnt++;
             if (mo) stdInCnt++;
-            if (stdInCnt > 1) throw new InvalidOperationException("Can't parse multiple input formats from STDIN");
+            if (stdInCnt > 1)
+                throw new InvalidOperationException($"Can't parse multiple input formats from STDIN for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
             Dictionary<string, string[]> terms = [];
             // Read JSON source files
             if (jsonInput is not null && jsonInput.Length > 0)
                 foreach (string fn in jsonInput)
                 {
-                    if (verbose) WriteInfo($"Processing JSON source file \"{fn}\"");
-                    await ReadJsonSourceAsync(FsHelper.CreateFileStream(fn, FileMode.Open, FileAccess.Read, FileShare.Read), fn, terms, failOnExistingKey, verbose).DynamicContext();
+                    if (verbose) WriteInfo($"Processing JSON source file \"{fn}\" for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
+                    await ReadJsonSourceAsync(
+                        FsHelper.CreateFileStream(fn, FileMode.Open, FileAccess.Read, FileShare.Read), 
+                        fn, 
+                        terms, 
+                        failOnExistingKey, 
+                        verbose, 
+                        cancellationToken
+                        ).DynamicContext();
                 }
             // Read MO source files
             MoFileParser? moParser = null;
@@ -114,8 +125,17 @@ namespace wan24.PoeditParser
                 using MemoryPoolStream ms = new();
                 foreach (string fn in moInput)
                 {
-                    if (verbose) WriteInfo($"Processing MO source file \"{fn}\"");
-                    await ReadMoSourceAsync(FsHelper.CreateFileStream(fn, FileMode.Open, FileAccess.Read, FileShare.Read), fn, moParser, ms, terms, failOnExistingKey, verbose).DynamicContext();
+                    if (verbose) WriteInfo($"Processing MO source file \"{fn}\" for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
+                    await ReadMoSourceAsync(
+                        FsHelper.CreateFileStream(fn, FileMode.Open, FileAccess.Read, FileShare.Read), 
+                        fn, 
+                        moParser, 
+                        ms, 
+                        terms, 
+                        failOnExistingKey, 
+                        verbose,
+                        cancellationToken
+                        ).DynamicContext();
                 }
             }
             // Read PO source files
@@ -126,33 +146,42 @@ namespace wan24.PoeditParser
                 using MemoryPoolStream ms = new();
                 foreach (string fn in poInput)
                 {
-                    if (verbose) WriteInfo($"Processing PO source file \"{fn}\"");
-                    await ReadPoSourceAsync(FsHelper.CreateFileStream(fn, FileMode.Open, FileAccess.Read, FileShare.Read), fn, poParser, ms, terms, failOnExistingKey, verbose).DynamicContext();
+                    if (verbose) WriteInfo($"Processing PO source file \"{fn}\" for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
+                    await ReadPoSourceAsync(
+                        FsHelper.CreateFileStream(fn, FileMode.Open, FileAccess.Read, FileShare.Read), 
+                        fn, 
+                        poParser, 
+                        ms, 
+                        terms, 
+                        failOnExistingKey, 
+                        verbose,
+                        cancellationToken
+                        ).DynamicContext();
                 }
             }
             // Read JSON from STDIN
             if (json)
             {
-                if (verbose) WriteInfo("Processing JSON from STDIN");
-                await ReadJsonSourceAsync(Console.OpenStandardInput(), fn: null, terms, failOnExistingKey, verbose).DynamicContext();
+                if (verbose) WriteInfo($"Processing JSON from STDIN for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
+                await ReadJsonSourceAsync(Console.OpenStandardInput(), fn: null, terms, failOnExistingKey, verbose, cancellationToken).DynamicContext();
             }
             // Read MO from STDIN
             if (mo)
             {
-                if (verbose) WriteInfo("Processing MO from STDIN");
+                if (verbose) WriteInfo($"Processing MO from STDIN for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
                 moParser ??= new();
                 using MemoryPoolStream ms = new();
-                await ReadMoSourceAsync(Console.OpenStandardInput(), fn: null, moParser, ms, terms, failOnExistingKey, verbose).DynamicContext();
+                await ReadMoSourceAsync(Console.OpenStandardInput(), fn: null, moParser, ms, terms, failOnExistingKey, verbose, cancellationToken).DynamicContext();
             }
             // Read PO from STDIN
             if (po)
             {
-                if (verbose) WriteInfo("Processing PO from STDIN");
+                if (verbose) WriteInfo($"Processing PO from STDIN for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
                 poParser ??= new();
                 using MemoryPoolStream ms = new();
-                await ReadPoSourceAsync(Console.OpenStandardInput(), fn: null, poParser, ms, terms, failOnExistingKey, verbose).DynamicContext();
+                await ReadPoSourceAsync(Console.OpenStandardInput(), fn: null, poParser, ms, terms, failOnExistingKey, verbose, cancellationToken).DynamicContext();
             }
-            if (verbose) WriteInfo($"Found {terms.Count} terms in total");
+            if (verbose) WriteInfo($"Found {terms.Count} terms in total{(output is null ? "STDOUT" : $"output file \"{output}\"")}");
             // Write output
             if (verbose) WriteInfo($"Writing internationalization file to {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
             Stream outputStream = output is null
@@ -163,131 +192,37 @@ namespace wan24.PoeditParser
                 // Header
                 if (!noHeader)
                 {
-                    if (Trace) WriteTrace("Writing header");
+                    if (Trace) WriteTrace($"Writing header to {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
                     int header = VERSION;
-                    if (compress) header |= 128;
-                    if (Trace) WriteTrace($"Writing header {header} (version {VERSION}, compressed: {compress})");
-                    await outputStream.WriteAsync((byte)header).DynamicContext();
+                    if (compress) header |= HEADER_COMPRESSION_FLAG;
+                    if (Trace) WriteTrace($"Writing header {header} (version {VERSION}, compressed: {compress}) for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
+                    await outputStream.WriteAsync((byte)header, cancellationToken).DynamicContext();
                 }
                 // Body
                 if (compress)
                 {
                     // Compressed
-                    if (Trace) WriteTrace($"Use compression \"{CompressionHelper.DefaultAlgorithm.DisplayName}\"");
+                    if (Trace) WriteTrace($"Use compression \"{CompressionHelper.DefaultAlgorithm.DisplayName}\" for {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
                     using MemoryPoolStream ms = new();
-                    await JsonHelper.EncodeAsync(terms, ms).DynamicContext();
+                    await JsonHelper.EncodeAsync(terms, ms, cancellationToken: cancellationToken).DynamicContext();
                     ms.Position = 0;
                     CompressionOptions options = CompressionHelper.DefaultAlgorithm.DefaultOptions;
                     options.FlagsIncluded = true;
                     options.AlgorithmIncluded = true;
                     options.UncompressedLengthIncluded = true;
                     options.LeaveOpen = true;
-                    options = await CompressionHelper.DefaultAlgorithm.WriteOptionsAsync(ms, outputStream, options).DynamicContext();
+                    options = await CompressionHelper.DefaultAlgorithm.WriteOptionsAsync(ms, outputStream, options, cancellationToken).DynamicContext();
                     using Stream compression = CompressionHelper.DefaultAlgorithm.GetCompressionStream(outputStream, options);
-                    await ms.CopyToAsync(compression).DynamicContext();
+                    await ms.CopyToAsync(compression, cancellationToken).DynamicContext();
                 }
                 else
                 {
                     // Uncompressed
-                    if (Trace) WriteTrace("Write uncompressed");
-                    await JsonHelper.EncodeAsync(terms, outputStream).DynamicContext();
+                    if (Trace) WriteTrace($"Write uncompressed to {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
+                    await JsonHelper.EncodeAsync(terms, outputStream, cancellationToken: cancellationToken).DynamicContext();
                 }
             }
-            if (verbose) WriteInfo("Done writing internationalization output");
-        }
-
-        /// <summary>
-        /// Build many internationalization (i8n) files from JSON (UTF-8) and/or PO/MO (gettext) source files (output filename is the input filename with the 
-        /// <c>.i8n</c> extension instead - existing files will be overwritten; default is to convert all *.json/po/mo files in the working folder)
-        /// </summary>
-        /// <param name="jsonInput">JSON input file (UTF-8) folder (no recursion)</param>
-        /// <param name="jsonInputPattern">JSON input pattern</param>
-        /// <param name="poInput">PO (gettext) input file folder (no recursion)</param>
-        /// <param name="poInputPattern">PO input pattern</param>
-        /// <param name="moInput">MO (gettext) input file folder (no recursion)</param>
-        /// <param name="moInputPattern">MO input pattern</param>
-        /// <param name="compress">To compress the internationalization files</param>
-        /// <param name="noHeader">To skip writing a header with the version number and the compression flag</param>
-        /// <param name="verbose">Write verbose informations to STDERR</param>
-        [CliApi("buildmany", IsDefault = true)]
-        [DisplayText("Build i8n files")]
-        [Description("Build many internationalization (i8n) files from JSON (UTF-8) or PO/MO (gettext) source files (output filename is the input filename with the \".i8n\" extension instead - existing files will be overwritten; default is to convert all *.json/po/mo files in the working folder)")]
-        public static async Task BuildManyAsync(
-
-            [CliApi(Example = "/path/to/sources")]
-            [DisplayText("JSON input")]
-            [Description("JSON input file (UTF-8) folder (no recursion; default is the working folder)")]
-            string jsonInput = "./",
-
-            [CliApi(Example = "*.json")]
-            [DisplayText("JSON input pattern")]
-            [Description("JSON input pattern (default is \"*.json\")")]
-            string jsonInputPattern = "*.json",
-
-            [CliApi(Example = "/path/to/sources")]
-            [DisplayText("PO input")]
-            [Description("PO (gettext) input file folder (no recursion; default is the working folder)")]
-            string poInput = "./",
-
-            [CliApi(Example = "*.po")]
-            [DisplayText("PO input pattern")]
-            [Description("PO (gettext) input pattern (default is \"*.po\")")]
-            string poInputPattern = "*.po",
-
-            [CliApi(Example = "/path/to/sources")]
-            [DisplayText("MO input")]
-            [Description("MO (gettext) input file folder (no recursion; default is the working folder)")]
-            string moInput = "./",
-
-            [CliApi(Example = "*.mo")]
-            [DisplayText("MO input pattern")]
-            [Description("MO input pattern (default is \"*.mo\")")]
-            string moInputPattern = "*.mo",
-
-            [CliApi]
-            [DisplayText("Compress")]
-            [Description("To compress the internationalization files")]
-            bool compress = false,
-
-            [CliApi]
-            [DisplayText("No header")]
-            [Description("To skip writing a header with the version number and the compression flag")]
-            bool noHeader = false,
-
-            [CliApi]
-            [DisplayText("Verbose")]
-            [Description("Write verbose informations to STDERR")]
-            bool verbose = false
-
-            )
-        {
-            verbose |= Trace;
-            if (Trace) WriteTrace("Creating many internationalization files");
-            foreach (string fn in FsHelper.FindFiles(jsonInput, searchPattern: jsonInputPattern, recursive: false))
-                await BuildAsync(
-                    jsonInput: [fn], 
-                    output: Path.Combine(jsonInput, $"{Path.GetFileNameWithoutExtension(fn)}.i8n"), 
-                    compress: compress, 
-                    noHeader: noHeader, 
-                    verbose: verbose
-                    ).DynamicContext();
-            foreach (string fn in FsHelper.FindFiles(poInput, searchPattern: poInputPattern, recursive: false))
-                await BuildAsync(
-                    poInput: [fn],
-                    output: Path.Combine(poInput, $"{Path.GetFileNameWithoutExtension(fn)}.i8n"),
-                    compress: compress,
-                    noHeader: noHeader,
-                    verbose: verbose
-                    ).DynamicContext();
-            foreach (string fn in FsHelper.FindFiles(moInput, searchPattern: moInputPattern, recursive: false))
-                await BuildAsync(
-                    moInput: [fn],
-                    output: Path.Combine(moInput, $"{Path.GetFileNameWithoutExtension(fn)}.i8n"),
-                    compress: compress,
-                    noHeader: noHeader,
-                    verbose: verbose
-                    ).DynamicContext();
-            if (Trace) WriteTrace("Done creating many internationalization files");
+            if (verbose) WriteInfo($"Done writing internationalization to {(output is null ? "STDOUT" : $"output file \"{output}\"")}");
         }
     }
 }
